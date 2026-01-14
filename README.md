@@ -37,14 +37,16 @@ fork于gitee内的一名大佬作品https://gitee.com/FancyCabbage/skyland-auto-
 
 2.下载`requirements.txt` ，在该目录下打开命令提示符，运行`pip install -r requirements.txt`
 
-2.下载脚本`skyland.py`、`SecuritySm.py`,这两个文件都要放置在`requirements.txt`文件同目录下
+3.下载脚本`skyland.py`、`SecuritySm.py`,这两个文件都要放置在`requirements.txt`文件同目录下
 
-3.命令提示符运行`python skyland.py`（结果输出如下就代表你成功了）
+（可选）在config.ini文件中配置ServerChan（Server酱）、Qmsg、PUSHPLUS推送
+
+4.命令提示符运行`python skyland.py`（结果输出如下就代表你成功了）
 ![img.png](assets/img_0.png)
 
-（以上3步可以用我打好的exe文件直接运行，链接见[release](https://gitee.com/FancyCabbage/skyland-auto-sign/releases)
+（以上4步可以用我打好的exe文件直接运行，链接见[release](https://gitee.com/FancyCabbage/skyland-auto-sign/releases)
 
-4.本软件有3种模式：
+5.本软件有3种模式：
 
 第一个模式和第二个模式不多说了，填入你的信息即可。
 
@@ -113,6 +115,8 @@ TOKEN和日志应该都会被存储在MAA根路径下
 
 9.选中`INPUT_HYPERGRYPH_TOKEN.txt`，在右边添加你的鹰角通行证 `TOKEN` ,支持多个，换行添加下一个即可。
 ![img_13.png](assets/img_13.png)
+
+（可选）ServerChan（Server酱）、Qmsg、PUSHPLUS推送配置在config.ini中
 
 10.保存完毕后，可以点击测试测试一下脚本。创建测试这里直接点击创建即可
 ![img_14.png](assets/img_14.png)

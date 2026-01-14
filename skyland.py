@@ -10,16 +10,40 @@ from typing import Optional, Tuple
 from datetime import date
 from getpass import getpass
 from urllib import parse
+from configparser import ConfigParser, NoSectionError, NoOptionError
 
 import requests
 
 from SecuritySm import get_d_id
 
+config_file = 'config.ini'
 token_save_name = 'TOKEN.txt'
 app_code = '4ca99fa6b56cc2ba'
 token_env = os.environ.get('TOKEN')
 # 现在想做什么？
 current_type = os.environ.get('SKYLAND_TYPE')
+CONFIG_SECTION = 'SKYLAND'
+secrets_to_check = [
+    'SC3_SENDKEY',
+    'SC3_UID',
+    'QMSG_KEY',
+    'PUSHPLUS_KEY',
+]
+config = ConfigParser()
+file_read = config.read(config_file, encoding='utf-8')
+CONFIG_SECTRETS = {}
+for secret in secrets_to_check:
+    secret_value = ''
+    secret_value = os.environ.get(secret, '').strip()
+    if not os.environ.get(secret):
+        if file_read:
+            try:
+                secret_value = config.get(CONFIG_SECTION, secret, fallback='').strip()
+            except (NoSectionError, NoOptionError):
+                pass
+            except Exception as e:
+                logging.error(f'读取配置文件时发生错误: {e!r}')
+    CONFIG_SECTRETS[secret] = secret_value
 
 http_local = threading.local()
 header = {
@@ -110,21 +134,27 @@ def push_serverchan3(sendkey: str, title: str, desp: str = "",
     """
     推送到 Server酱³
     - sendkey: 你的 SendKey（形如 sctp123456tXXXX...）
-    - uid: 可选；不填则自动从 sendkey 提取（正则 ^sctp(\\d+)t）
+    - uid: 可选；不填则自动从 sendkey 提取（正则 ^sctp(\d+)t）
     - title/desp: 标题与正文（desp 支持 Markdown）
     - tags/short: 可选
     返回: (是否成功, 返回文本)
     """
+    sendkey = CONFIG_SECTRETS.get('SC3_SENDKEY', '')
+    sendkey = sendkey.strip()
     if not sendkey:
         return False, "sendkey is empty"
 
-    if uid is None:
+    if uid is None or uid == '':
         m = re.match(r"^sctp(\d+)t", sendkey)
+        print(f"[SC3] 从 sendkey 中提取 uid，结果: {m.group(1) if m else '未提取到'}")
         if not m:
             return False, "cannot extract uid from sendkey; please pass uid explicitly"
         uid = m.group(1)
-
-    api = f"https://{uid}.push.ft07.com/send/{sendkey}.send"
+    if uid:
+        uid = uid.strip()
+        api = f"https://{uid}.push.ft07.com/send/{sendkey}.send"
+    
+    print(f"[SC3] 推送接口: {api}")
     payload = {
         "title": title or "通知",
         "desp": desp or "",
@@ -135,7 +165,7 @@ def push_serverchan3(sendkey: str, title: str, desp: str = "",
         payload["short"] = short
 
     try:
-        r = requests.post(api, json=payload, timeout=timeout)
+        r = requests.post(api, json=payload, timeout=10)
         ok = (r.status_code == 200)
         return ok, r.text
     except Exception as e:
@@ -354,6 +384,8 @@ def input_for_token():
 def start():
     token = init_token()
     all_logs = []  # 新增：汇总所有账号/角色的输出
+    config = ConfigParser()
+    file_read = config.read(config_file, encoding='utf-8')
 
     for i in token:
         try:
@@ -371,9 +403,8 @@ def start():
     # 在本地或 GitHub Actions 设置：
     #   SC3_SENDKEY: 必填
     #   SC3_UID: 可选（若不设，将自动从 sendkey 中提取）
-    sc3_sendkey = os.environ.get('SC3_SENDKEY', '').strip()
-    sc3_uid     = os.environ.get('SC3_UID', '').strip() or None
-
+    sc3_sendkey = CONFIG_SECTRETS.get('SC3_SENDKEY', '')
+    sc3_uid = CONFIG_SECTRETS.get('SC3_UID', '')
     if sc3_sendkey:
         # 标题带日期；正文多行
         title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
@@ -383,6 +414,63 @@ def start():
         print("[SC3] 推送成功" if ok else "[SC3] 推送失败", resp)
     else:
         print("[SC3] 跳过推送：未设置环境变量 SC3_SENDKEY")
+
+    #本地测试环境方便调试，优先使用配置文件
+    # if not QMSG_KEY:
+    #     if file_read:
+    #         try:
+    #             QMSG_KEY = config.get('DEFAULT', 'QMSG_KEY', fallback='').# strip()
+    #         except (NoSectionError, NoOptionError):
+    #             QMSG_KEY = ''
+    #     else:
+    #         pass  # 配置文件不存在，跳过读取
+
+    QMSG_KEY = CONFIG_SECTRETS.get('QMSG_KEY', '')
+    if QMSG_KEY:
+        title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
+        desp = '\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
+        api = f'https://qmsg.zendee.cn/jsend/{QMSG_KEY}'
+        payload = {
+            "msg": f"{title}\n{desp}",
+            "qq": "",  # 指定QQ/QQ群
+            "bot": "", # 指定bot
+        }
+        #print(f"{title}\n{desp}")  # 本地打印推送内容
+        try:
+            r = requests.post(api, json=payload, timeout=10)
+            if r.status_code == 200:
+                print("[Qmsg] 推送成功", r.text)
+            else:
+                print("[Qmsg] 推送失败", r.text)
+        except Exception as e:
+            print(f"[Qmsg] 推送异常: {e!r}")
+    else:
+        print("[Qmsg] 跳过推送：未设置环境变量 QMSG_KEY")
+
+    PUSHPLUS_KEY = CONFIG_SECTRETS.get('PUSHPLUS_KEY', '')
+    if PUSHPLUS_KEY :
+        title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
+        content = '\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
+        api = 'http://www.pushplus.plus/send'
+        payload = {
+            "token": PUSHPLUS_KEY,
+            "title": title,
+            "content": content,
+            "topic": "",  # 指定topic
+            "template": "html"
+        }
+        try:
+            r = requests.post(api, json=payload, timeout=10)
+            resp = r.json()
+            if resp.get('code') == 200:
+                print("[PushPlus] 推送成功", resp)
+            else:
+                print("[PushPlus] 推送失败", resp)
+        except Exception as e:
+            print(f"[PushPlus] 推送异常: {e!r}")
+    else:
+        print("[PushPlus] 跳过推送：未设置环境变量 PUSHPLUS_KEY")
+
 
 
 if __name__ == '__main__':
