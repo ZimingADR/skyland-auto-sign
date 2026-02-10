@@ -28,6 +28,7 @@ secrets_to_check = [
     'SC3_UID',
     'QMSG_KEY',
     'PUSHPLUS_KEY',
+    'FEISHU_WEBHOOK', # 新增这一行
 ]
 config = ConfigParser()
 file_read = config.read(config_file, encoding='utf-8')
@@ -471,6 +472,35 @@ def start():
     else:
         print("[PushPlus] 跳过推送：未设置环境变量 PUSHPLUS_KEY")
 
+    # ================= ⬇️ 从这里开始添加飞书代码 ⬇️ =================
+
+    # === 飞书推送 (Feishu/Lark) ===
+    FEISHU_WEBHOOK = CONFIG_SECTRETS.get('FEISHU_WEBHOOK', '')
+    if FEISHU_WEBHOOK:
+        title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
+        content = '\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
+        
+        # 飞书机器人要求 content 必须包含 text 字段
+        payload = {
+            "msg_type": "text",
+            "content": {
+                "text": f"{title}\n\n{content}"
+            }
+        }
+        try:
+            r = requests.post(FEISHU_WEBHOOK, json=payload, timeout=10)
+            resp = r.json()
+            # 飞书成功返回 code: 0
+            if resp.get('code') == 0:
+                print("[飞书] 推送成功", resp)
+            else:
+                print("[飞书] 推送失败", resp)
+        except Exception as e:
+            print(f"[飞书] 推送异常: {e!r}")
+    else:
+        print("[飞书] 跳过推送：未设置环境变量 FEISHU_WEBHOOK")
+
+    # ================= ⬆️ 添加到这里结束 ⬆️ =================
 
 
 if __name__ == '__main__':
@@ -485,4 +515,5 @@ if __name__ == '__main__':
     end_time = time.time()
     logging.info(f'complete with {(end_time - start_time) * 1000} ms')
     logging.info('===========ending============')
+
 
