@@ -107,7 +107,7 @@ def config_logger():
             data = j['data']
             for i in filter_key:
                 if i in data:
-                    data[i] = '*****'
+                    data[i] = '*'
             return json.dumps(j, ensure_ascii=False)
         except:
             return text
@@ -307,15 +307,22 @@ def do_sign(cred_resp):
         }
         resp = requests.post(sign_url, headers=get_sign_header(sign_url, 'post', body, http_local.header),
                              json=body).json()
+        
+        # 提取角色基本信息，加粗名字（如果平台支持Markdown）
+        char_info = f"👤 **{i.get('nickName')}** ({i.get('channelName')})"
+
         if resp['code'] != 0:
-            msg = f'角色{i.get("nickName")}({i.get("channelName")})签到失败！原因：{resp.get("message")}'
+            # 失败情况：使用❌图标，并换行缩进
+            msg = f"{char_info}\n   ❌ 签到失败：{resp.get('message')}"
             print(msg)
             logs_out.append(msg)
             continue
+        
         awards = resp['data']['awards']
         for j in awards:
             res = j['resource']
-            msg = f'角色{i.get("nickName")}({i.get("channelName")})签到成功，获得了{res["name"]}×{j.get("count") or 1}'
+            # 成功情况：使用✅图标，并换行缩进
+            msg = f"{char_info}\n   ✅ 签到成功：获得 {res['name']}×{j.get('count') or 1}"
             print(msg)
             logs_out.append(msg)
 
@@ -401,42 +408,27 @@ def start():
     print("签到完成！")
 
     # === Server酱³ 推送（可选，通过环境变量控制） ===
-    # 在本地或 GitHub Actions 设置：
-    #   SC3_SENDKEY: 必填
-    #   SC3_UID: 可选（若不设，将自动从 sendkey 中提取）
     sc3_sendkey = CONFIG_SECTRETS.get('SC3_SENDKEY', '')
     sc3_uid = CONFIG_SECTRETS.get('SC3_UID', '')
     if sc3_sendkey:
-        # 标题带日期；正文多行
         title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
-        # 给 Server酱³ 的 desp，支持 Markdown，这里简单用换行拼接
-        desp = '\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
+        desp = '\n\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
         ok, resp = push_serverchan3(sc3_sendkey, title, desp, uid=sc3_uid)
         print("[SC3] 推送成功" if ok else "[SC3] 推送失败", resp)
     else:
         print("[SC3] 跳过推送：未设置环境变量 SC3_SENDKEY")
 
-    #本地测试环境方便调试，优先使用配置文件
-    # if not QMSG_KEY:
-    #     if file_read:
-    #         try:
-    #             QMSG_KEY = config.get('DEFAULT', 'QMSG_KEY', fallback='').# strip()
-    #         except (NoSectionError, NoOptionError):
-    #             QMSG_KEY = ''
-    #     else:
-    #         pass  # 配置文件不存在，跳过读取
-
+    # === Qmsg 推送 ===
     QMSG_KEY = CONFIG_SECTRETS.get('QMSG_KEY', '')
     if QMSG_KEY:
         title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
-        desp = '\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
+        desp = '\n\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
         api = f'https://qmsg.zendee.cn/jsend/{QMSG_KEY}'
         payload = {
             "msg": f"{title}\n{desp}",
             "qq": "",  # 指定QQ/QQ群
             "bot": "", # 指定bot
         }
-        #print(f"{title}\n{desp}")  # 本地打印推送内容
         try:
             r = requests.post(api, json=payload, timeout=10)
             if r.status_code == 200:
@@ -448,10 +440,11 @@ def start():
     else:
         print("[Qmsg] 跳过推送：未设置环境变量 QMSG_KEY")
 
+    # === PushPlus 推送 ===
     PUSHPLUS_KEY = CONFIG_SECTRETS.get('PUSHPLUS_KEY', '')
     if PUSHPLUS_KEY :
         title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
-        content = '\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
+        content = '\n\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
         api = 'http://www.pushplus.plus/send'
         payload = {
             "token": PUSHPLUS_KEY,
@@ -472,15 +465,12 @@ def start():
     else:
         print("[PushPlus] 跳过推送：未设置环境变量 PUSHPLUS_KEY")
 
-    # ================= ⬇️ 从这里开始添加飞书代码 ⬇️ =================
-
     # === 飞书推送 (Feishu/Lark) ===
     FEISHU_WEBHOOK = CONFIG_SECTRETS.get('FEISHU_WEBHOOK', '')
     if FEISHU_WEBHOOK:
         title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
-        content = '\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
+        content = '\n\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
         
-        # 飞书机器人要求 content 必须包含 text 字段
         payload = {
             "msg_type": "text",
             "content": {
@@ -490,7 +480,6 @@ def start():
         try:
             r = requests.post(FEISHU_WEBHOOK, json=payload, timeout=10)
             resp = r.json()
-            # 飞书成功返回 code: 0
             if resp.get('code') == 0:
                 print("[飞书] 推送成功", resp)
             else:
@@ -499,8 +488,6 @@ def start():
             print(f"[飞书] 推送异常: {e!r}")
     else:
         print("[飞书] 跳过推送：未设置环境变量 FEISHU_WEBHOOK")
-
-    # ================= ⬆️ 添加到这里结束 ⬆️ =================
 
 
 if __name__ == '__main__':
@@ -515,5 +502,3 @@ if __name__ == '__main__':
     end_time = time.time()
     logging.info(f'complete with {(end_time - start_time) * 1000} ms')
     logging.info('===========ending============')
-
-
