@@ -308,8 +308,14 @@ def do_sign(cred_resp):
         resp = requests.post(sign_url, headers=get_sign_header(sign_url, 'post', body, http_local.header),
                              json=body).json()
         
-        # 提取角色基本信息，加粗名字（如果平台支持Markdown）
-        char_info = f"👤 **{i.get('nickName')}** ({i.get('channelName')})"
+        # === 修改处：处理名字，去掉#nnnn，去掉服务器名 ===
+        # 原名形如: "神奇的神烦狗#7480"
+        raw_nick_name = i.get('nickName', '')
+        # 如果包含#，则分割取第一部分，否则直接用原名
+        nick_name = raw_nick_name.split('#')[0] if '#' in raw_nick_name else raw_nick_name
+        
+        # 提取角色基本信息，加粗名字（如果平台支持Markdown），不含(官服)
+        char_info = f"👤 **{nick_name}**"
 
         if resp['code'] != 0:
             # 失败情况：使用❌图标，并换行缩进
@@ -471,10 +477,29 @@ def start():
         title = f'森空岛自动签到结果 - {date.today().strftime("%Y-%m-%d")}'
         content = '\n\n'.join(all_logs) if all_logs else '今日无可用账号或无输出'
         
+        # 使用 interactive 消息卡片以支持 markdown
         payload = {
-            "msg_type": "text",
-            "content": {
-                "text": f"{title}\n\n{content}"
+            "msg_type": "interactive",
+            "card": {
+                "config": {
+                    "wide_screen_mode": True
+                },
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": title
+                    },
+                    "template": "blue"
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": content
+                        }
+                    }
+                ]
             }
         }
         try:
